@@ -279,7 +279,8 @@
         const ENEMY_MIN_DISTANCE_TO_PLAYER = 0.5; // Minimum distance enemies try to keep from player
         const ENEMY_MIN_SPAWN_DISTANCE_FROM_PLAYER = 4;
         const FOV = Math.PI / 3;
-        let RAYCASTER_CANVAS_WIDTH = 640; let RAYCASTER_CANVAS_HEIGHT = 400;
+        let RAYCASTER_CANVAS_WIDTH = 800; // Default/Initial Width
+        let RAYCASTER_CANVAS_HEIGHT = 600; // Default/Initial Height (4:3 aspect ratio)
         const NUM_RAYS = 320;
         let zBuffer = new Array(NUM_RAYS);
         let enemies = [
@@ -505,12 +506,20 @@
                 mapEditorCanvas.height = editorCellSize * MAP_GRID_HEIGHT;
             }
 
+            // Set Raycaster Canvas Internal Resolution
             const raycasterPanel = raycasterCanvas.parentElement;
-            if (raycasterPanel && raycasterPanel.clientWidth > 0) { 
-                RAYCASTER_CANVAS_WIDTH = raycasterPanel.clientWidth; 
-                RAYCASTER_CANVAS_HEIGHT = Math.floor(RAYCASTER_CANVAS_WIDTH * (10/16)); // Maintain aspect ratio
-            } else { 
-                RAYCASTER_CANVAS_WIDTH = 640; RAYCASTER_CANVAS_HEIGHT = 400; 
+            const desiredBaseWidth = 800;
+            const desiredBaseHeight = 600; // For 4:3 aspect ratio with desiredBaseWidth
+
+            if (raycasterPanel && raycasterPanel.clientWidth > 0) {
+                // Use the panel's width if it's larger than our desired base, otherwise use desired base.
+                // This allows the canvas to be wider if space is available.
+                RAYCASTER_CANVAS_WIDTH = Math.max(desiredBaseWidth, raycasterPanel.clientWidth);
+                RAYCASTER_CANVAS_HEIGHT = Math.floor(RAYCASTER_CANVAS_WIDTH * (3/4)); // Maintain 4:3 aspect ratio
+            } else {
+                // Fallback if panel clientWidth is not available or zero
+                RAYCASTER_CANVAS_WIDTH = desiredBaseWidth;
+                RAYCASTER_CANVAS_HEIGHT = desiredBaseHeight;
             }
             raycasterCanvas.width = RAYCASTER_CANVAS_WIDTH;
             raycasterCanvas.height = RAYCASTER_CANVAS_HEIGHT;
