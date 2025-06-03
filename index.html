@@ -3,19 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raycaster - Procedural Maps with Simple Enemy AI</title>
+    <title>Raycaster - Solid Sky</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script> 
     <style>
         body { font-family: 'Inter', sans-serif; margin: 0; background-color: #1a202c; color: #e2e8f0; }
         .container { display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 1rem; }
-        .main-content { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 1200px; }
-        @media (min-width: 768px) { .main-content { flex-direction: row; } }
+        .main-content { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 1rem; 
+            width: 100%; 
+            max-width: 1400px; 
+        }
+        @media (min-width: 1024px) { .main-content { flex-direction: row; } }
         .panel { background-color: #2d3748; border-radius: 0.5rem; padding: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .editor-panel { flex: 1; min-width: 280px; }
-        .raycaster-panel { flex: 2; }
+        
+        .left-column-group { display: flex; flex-direction: column; gap: 1rem; flex: 1; }
+        .debug-panel { font-size: 0.875rem; line-height: 1.5; }
+        .debug-panel p { margin-bottom: 0.25rem; }
+        .debug-panel span { color: #90cdf4; font-weight: bold; }
+
+        .raycaster-panel { flex: 2; position: relative; } 
+        
         canvas { display: block; border-radius: 0.375rem; background-color: #4a5568; cursor: crosshair;}
-        #mapEditorCanvas { cursor: pointer; width: 100%; height: auto; max-height: 400px; }
-        #raycasterCanvas { width: 100%; height: auto; max-height: 600px; }
+        #mapEditorCanvas { cursor: pointer; width: 100%; height: auto; max-height: 350px; }
+        #raycasterCanvas { width: 100%; height: auto; max-height: 720px; }
         .controls-info p { margin-bottom: 0.5rem; }
         .button-panel { margin-top: 1rem; text-align: center; }
         .button-panel button {
@@ -25,21 +38,36 @@
         .button-panel button:hover { background-color: #3c4b8a; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200">
+<body>
     <div class="container p-4">
         <header class="mb-6 text-center">
-            <h1 class="text-3xl font-bold text-sky-400">Raycaster - Procedural Maps with Simple Enemy AI</h1>
+            <h1 class="text-3xl font-bold text-sky-400">Raycaster - Solid Sky</h1>
         </header>
 
         <div class="main-content gap-4">
-            <div class="panel editor-panel">
-                <h2 class="text-xl font-semibold mb-3 text-sky-300">Map Editor</h2>
-                <canvas id="mapEditorCanvas"></canvas>
-                <div class="controls-info mt-3 text-sm text-gray-400">
-                    <p>Click grid to place/remove walls (except border).</p>
-                    <p>Player: <span class="text-red-400 font-bold">Red Dot</span>. Enemies: Coloured Circles.</p>
+            <div class="left-column-group">
+                <div class="panel editor-panel">
+                    <h2 class="text-xl font-semibold mb-3 text-sky-300">Map Editor</h2>
+                    <canvas id="mapEditorCanvas"></canvas>
+                    <div class="controls-info mt-3 text-sm text-gray-400">
+                        <p>Click grid to place/remove walls (except border).</p>
+                        <p>Player: <span class="text-red-400 font-bold">Red Dot</span>. Enemies: Coloured Circles.</p>
+                    </div>
+                    <div class="button-panel"> <button id="generateMapBtn">Generate New Map</button> </div>
                 </div>
-                <div class="button-panel"> <button id="generateMapBtn">Generate New Map</button> </div>
+
+                <div id="debugInfoPanel" class="panel debug-panel">
+                    <h2 class="text-xl font-semibold mb-3 text-sky-300">Ray Inspector (Center Ray)</h2>
+                    <p>Textures: <span id="debugTexturesEnabledVal">N/A</span></p>
+                    <p>Ray Index: <span id="debugRayIndexVal">N/A</span></p>
+                    <p>Ray Angle: <span id="debugRayAngleVal">N/A</span></p>
+                    <p>Wall Hit (Map): (<span id="debugWallHitXVal">N/A</span>, <span id="debugWallHitYVal">N/A</span>)</p>
+                    <p>Distance (Raw): <span id="debugDistRawVal">N/A</span></p>
+                    <p>Distance (Corrected): <span id="debugDistCorrVal">N/A</span></p>
+                    <p>Wall Side: <span id="debugWallSideVal">N/A</span></p>
+                    <p>WallX (U-coord): <span id="debugWallXVal">N/A</span></p>
+                    <p>TextureX (Calculated): <span id="debugTexXVal">N/A</span></p>
+                </div>
             </div>
 
             <div class="panel raycaster-panel">
@@ -47,7 +75,9 @@
                 <canvas id="raycasterCanvas"></canvas>
                  <div class="controls-info mt-3 text-sm text-gray-400">
                     <p><kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">W/S</kbd> - Move, <kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">A/D</kbd> - Turn</p>
-                    <p><kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Mouse Click</kbd> on Raycaster View to Fire</p>
+                    <p><kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Mouse Click</kbd> to Fire</p>
+                    <p><kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">T</kbd> - Toggle Textures</p>
+                    <p>If Game Over, <kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">R</kbd> to Restart</p>
                 </div>
             </div>
         </div>
@@ -60,131 +90,173 @@
         const raycasterCtx = raycasterCanvas.getContext('2d');
         const generateMapBtn = document.getElementById('generateMapBtn');
 
+        const debugTexturesEnabledVal = document.getElementById('debugTexturesEnabledVal');
+        const debugRayIndexVal = document.getElementById('debugRayIndexVal');
+        const debugRayAngleVal = document.getElementById('debugRayAngleVal');
+        const debugWallHitXVal = document.getElementById('debugWallHitXVal');
+        const debugWallHitYVal = document.getElementById('debugWallHitYVal');
+        const debugDistRawVal = document.getElementById('debugDistRawVal');
+        const debugDistCorrVal = document.getElementById('debugDistCorrVal');
+        const debugWallSideVal = document.getElementById('debugWallSideVal');
+        const debugWallXVal = document.getElementById('debugWallXVal');
+        const debugTexXVal = document.getElementById('debugTexXVal');
+
         const MAP_GRID_WIDTH = 16; 
         const MAP_GRID_HEIGHT = 16;
         let editorCellSize; 
-        let mapData = []; // 0 for empty, 1 for wall
+        let mapData = [];
 
-        // Map Generation Constants
-        const RW_STEPS_PER_WALKER = 120;
-        const RW_NUM_WALKERS = 4;
-        const RW_WALKER_START_PADDING = 2; // Walkers start at least this far from the edge
+        const player = {
+            x:3.5,y:3.5,angle:Math.PI/4,speed:0.05,turnSpeed:0.035,radius:0.2,dirX:0,dirY:0,planeX:0,planeY:0,health:100,maxHealth:100,isInvincible:false,invincibleTimer:0,invincibilityDuration:30
+        };
+        const FOV = Math.PI / 3;
+        let RAYCASTER_CANVAS_WIDTH = 640; let RAYCASTER_CANVAS_HEIGHT = 400;
+        const NUM_RAYS = 320; 
+        let zBuffer = new Array(NUM_RAYS);
 
-        // Raycasting Constants
-        const MAX_RAY_DEPTH = 20; // Max distance a ray will travel
+        const TEXTURE_WIDTH = 64; const TEXTURE_HEIGHT = 64;
+        const BRICK_COLOR_PRIMARY_RGB = [43,108,176]; const BRICK_COLOR_SHADOW_RGB = [29,78,137]; const MORTAR_COLOR_RGB = [160,174,192];      
+        
+        // Sky constants removed
 
-        function randomWalkMapGenerator(width, height, stepsPerWalker, numWalkers) {
-            let newMap = Array.from({ length: height }, () => Array(width).fill(1)); // Initialize map with all walls
-            const DIRECTIONS = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }]; // N, S, W, E
-            for (let i = 0; i < numWalkers; i++) {
-                let currentX = Math.floor(Math.random() * (width - RW_WALKER_START_PADDING * 2)) + RW_WALKER_START_PADDING;
-                let currentY = Math.floor(Math.random() * (height - RW_WALKER_START_PADDING * 2)) + RW_WALKER_START_PADDING;
-                if (newMap[currentY] && newMap[currentY][currentX] !== undefined) { // Ensure starting point is valid
-                    newMap[currentY][currentX] = 0; // Carve out starting point
+        let enemies = [ 
+             {id:1,size:0.7,color:'#e53e3e',vOffset:0.0,speed:0.015,contactDamage:10,maxHealth:30},{id:2,size:0.6,color:'#48bb78',vOffset:-0.2,speed:0.02,contactDamage:15,maxHealth:20},{id:3,size:0.8,color:'#4299e1',vOffset:0.2,speed:0.01,contactDamage:5,maxHealth:40},{id:4,size:1.0,color:'#ecc94b',vOffset:0.0,speed:0.012,contactDamage:20,maxHealth:50}
+        ];
+        
+        const keysPressed = {};
+        let enemiesEliminated = 0; let totalEnemiesSpawned = 0; let gameLoopRunning = true; 
+        let texturesEnabled = true; 
+        let tKeyPressed = false; 
+
+        const HITSCAN_RANGE = 25; const HITSCAN_MIN_DAMAGE = 5; const HITSCAN_MAX_DAMAGE = 15;
+        const FIRE_COOLDOWN_MAX = 10; let fireCooldown = 0;
+        let audioInitialized = false;
+        let sfxPlayerFire, sfxEnemyHit, sfxPlayerDamage, sfxEnemyEliminated;
+
+        let selectedRayInfo = {}; 
+        const debugRayToInspect = Math.floor(NUM_RAYS / 2);
+
+        function initializeSounds(){
+            if(typeof Tone==='undefined')return;
+            sfxPlayerFire=new Tone.Synth({oscillator:{type:'triangle'},envelope:{attack:0.005,decay:0.05,sustain:0,release:0.1},volume:-10}).toDestination();
+            sfxEnemyHit=new Tone.MembraneSynth({pitchDecay:0.02,octaves:3,oscillator:{type:'sine'},envelope:{attack:0.001,decay:0.1,sustain:0,release:0.1},volume:-12}).toDestination();
+            sfxEnemyEliminated=new Tone.NoiseSynth({noise:{type:'white'},envelope:{attack:0.005,decay:0.1,sustain:0,release:0.1},volume:-15}).toDestination();
+            sfxPlayerDamage=new Tone.Synth({oscillator:{type:'square'},envelope:{attack:0.01,decay:0.1,sustain:0,release:0.1},volume:-8}).toDestination();
+        }
+        async function startAudioContext(){
+            if(!audioInitialized&&typeof Tone!=='undefined'&&Tone.start){
+                try{
+                    await Tone.start();
+                    initializeSounds();
+                    audioInitialized=true;
+                } catch(e){
+                    audioInitialized=false;
                 }
-                for (let s = 0; s < stepsPerWalker; s++) {
-                    const direction = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-                    let nextX = currentX + direction.dx;
-                    let nextY = currentY + direction.dy;
-                    // Stay within inner bounds (don't carve into the border walls)
-                    if (nextX > 0 && nextX < width - 1 && nextY > 0 && nextY < height - 1) {
-                        currentX = nextX;
-                        currentY = nextY;
-                        if (newMap[currentY][currentX] === 1) { // If it's a wall
-                            newMap[currentY][currentX] = 0; // Carve it
-                        }
+            } else if(typeof Tone!=='undefined'&&Tone.context&&Tone.context.state==="running"){
+                if(!sfxPlayerFire){ 
+                    initializeSounds();
+                }
+                audioInitialized=true;
+            }
+        }
+        function playSound(synth,note,duration,offset=0.02){
+            if(audioInitialized&&synth&&Tone&&Tone.context&&Tone.context.state==='running'){
+                try{
+                    synth.triggerAttackRelease(note,duration,Tone.now()+offset);
+                } catch(e){
+                    // console.error("Error playing sound:", e, synth, note);
+                }
+            }
+        }
+        function randomWalkMapGenerator(width, height, stepsPerWalker, numWalkers){
+            let newMap = Array.from({length:height},()=>Array(width).fill(1));
+            const directions = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for(let i = 0; i < numWalkers; i++){
+                let currentX = Math.floor(Math.random()*(width-4))+2;
+                let currentY = Math.floor(Math.random()*(height-4))+2;
+                if(newMap[currentY] && newMap[currentY][currentX] !== undefined) newMap[currentY][currentX] = 0;
+                for(let step = 0; step < stepsPerWalker; step++){
+                    const dir = directions[Math.floor(Math.random()*directions.length)];
+                    let nextX = currentX + dir.dx;
+                    let nextY = currentY + dir.dy;
+                    if(nextX > 0 && nextX < width - 1 && nextY > 0 && nextY < height - 1){
+                        currentX = nextX; currentY = nextY;
+                        if(newMap[currentY][currentX] === 1) newMap[currentY][currentX] = 0;
                     } else {
-                        s--; 
+                        step--;
                     }
                 }
             }
-            for (let y = 0; y < height; y++) {
-                newMap[y][0] = 1; // Left border
-                newMap[y][width - 1] = 1; // Right border
-            }
-            for (let x = 0; x < width; x++) {
-                newMap[0][x] = 1; // Top border
-                newMap[height - 1][x] = 1; // Bottom border
-            }
+            for(let y=0;y<height;y++){newMap[y][0]=1;newMap[y][width-1]=1;}
+            for(let x=0;x<width;x++){newMap[0][x]=1;newMap[height-1][x]=1;}
             return newMap;
         }
-
-        function floodFill(map, width, height, x, y, areaId, areaMap) {
+        function floodFill(map, width, height, x, y, areaId, areaMap){
             let cellsInArea = [];
-            if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1 || map[y][x] !== 0 || areaMap[y][x] !== 0) {
-                return cellsInArea;
-            }
-            let queue = [[x, y]];
+            if(x<=0||x>=width-1||y<=0||y>=height-1||map[y][x]!==0||areaMap[y][x]!==0) return cellsInArea;
+            let queue = [[x,y]];
             areaMap[y][x] = areaId;
-            cellsInArea.push({ x, y });
-            const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+            cellsInArea.push({x,y});
+            const directions = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
             let head = 0;
-            while (head < queue.length) {
-                const [cx, cy] = queue[head++];
-                for (const dir of directions) {
-                    const nx = cx + dir.dx;
-                    const ny = cy + dir.dy;
-                    if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && map[ny][nx] === 0 && areaMap[ny][nx] === 0) {
-                        areaMap[ny][nx] = areaId;
-                        cellsInArea.push({ x: nx, y: ny });
-                        queue.push([nx, ny]);
+            while(head < queue.length){
+                const[currentX,currentY] = queue[head++];
+                for(const dir of directions){
+                    const nextX = currentX + dir.dx;
+                    const nextY = currentY + dir.dy;
+                    if(nextX>0&&nextX<width-1&&nextY>0&&nextY<height-1&&map[nextY][nextX]===0&&areaMap[nextY][nextX]===0){
+                        areaMap[nextY][nextX] = areaId;
+                        cellsInArea.push({x:nextX,y:nextY});
+                        queue.push([nextX,nextY]);
                     }
                 }
             }
             return cellsInArea;
         }
-
-        function carveTunnel(map, x1, y1, x2, y2, width, height) {
-            let cx = x1;
-            let cy = y1;
-            while (cx !== x2) {
-                if (cx > 0 && cx < width - 1 && cy > 0 && cy < height - 1) map[cy][cx] = 0;
-                cx += (x2 > cx) ? 1 : -1;
+        function carveTunnel(map, x1, y1, x2, y2, width, height){
+            let currentX = x1; let currentY = y1;
+            while(currentX !== x2){
+                if(currentX>0&&currentX<width-1&&currentY>0&&currentY<height-1) map[currentY][currentX] = 0;
+                currentX += (x2 > currentX) ? 1 : -1;
             }
-            while (cy !== y2) {
-                if (cx > 0 && cx < width - 1 && cy > 0 && cy < height - 1) map[cy][cx] = 0;
-                cy += (y2 > cy) ? 1 : -1;
+            while(currentY !== y2){
+                if(currentX>0&&currentX<width-1&&currentY>0&&currentY<height-1) map[currentY][currentX] = 0;
+                currentY += (y2 > currentY) ? 1 : -1;
             }
-            // Ensure endpoints (which should be empty) and corner are clear if within bounds
-            if (x1 > 0 && x1 < width - 1 && y1 > 0 && y1 < height - 1) map[y1][x1] = 0;
-            if (x2 > 0 && x2 < width - 1 && y2 > 0 && y2 < height - 1) map[y2][x2] = 0;
-            if (x2 > 0 && x2 < width - 1 && y1 > 0 && y1 < height - 1) map[y1][x2] = 0; // Corner of L-shape
+            if(x1>0&&x1<width-1&&y1>0&&y1<height-1) map[y1][x1] = 0;
+            if(x2>0&&x2<width-1&&y2>0&&y2<height-1) map[y2][x2] = 0;
+            if(x2>0&&x2<width-1&&y1>0&&y1<height-1) map[y1][x2] = 0; 
         }
-
-        function ensureMapConnectivity(map, width, height) {
+        function ensureMapConnectivity(map, width, height){
             let areaMap = Array(height).fill(null).map(() => Array(width).fill(0));
             let allAreas = [];
             let currentAreaId = 1;
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
-                    if (map[y][x] === 0 && areaMap[y][x] === 0) {
-                        const cellsInThisArea = floodFill(map, width, height, x, y, currentAreaId, areaMap);
-                        if (cellsInThisArea.length > 0) {
-                            allAreas.push({ id: currentAreaId, cells: cellsInThisArea, connectedToMain: false });
+            for(let y=1; y<height-1; y++){
+                for(let x=1; x<width-1; x++){
+                    if(map[y][x]===0 && areaMap[y][x]===0){
+                        const cellsInThisArea = floodFill(map,width,height,x,y,currentAreaId,areaMap);
+                        if(cellsInThisArea.length > 0){
+                            allAreas.push({id:currentAreaId, cells:cellsInThisArea, connectedToMain:false});
                             currentAreaId++;
                         }
                     }
                 }
             }
-
-            if (allAreas.length <= 1) return;
-
+            if(allAreas.length <= 1) return;
             allAreas[0].connectedToMain = true;
-            let connectedCount = 1;
-
-            while (connectedCount < allAreas.length) {
-                let bestConnection = { dist: Infinity, mainCell: null, otherCell: null, otherAreaIndex: -1 };
-                for (let i = 0; i < allAreas.length; i++) {
-                    if (!allAreas[i].connectedToMain) continue;
-                    for (let j = 0; j < allAreas.length; j++) {
-                        if (allAreas[j].connectedToMain) continue;
-                        
+            let connectedCount = 1; 
+            while(connectedCount < allAreas.length){
+                let bestConnection = {dist:Infinity, mainCell:null, otherCell:null, otherAreaIndex:-1};
+                for(let i=0; i<allAreas.length; i++){
+                    if(!allAreas[i].connectedToMain) continue;
+                    for(let j=0; j<allAreas.length; j++){
+                        if(allAreas[j].connectedToMain) continue;
                         const areaA = allAreas[i];
                         const areaB = allAreas[j];
-                        for (const cellA of areaA.cells) {
-                            for (const cellB of areaB.cells) {
-                                const dist = Math.abs(cellA.x - cellB.x) + Math.abs(cellA.y - cellB.y);
-                                if (dist < bestConnection.dist) {
+                        for(const cellA of areaA.cells){
+                            for(const cellB of areaB.cells){
+                                const dist = Math.abs(cellA.x-cellB.x) + Math.abs(cellA.y-cellB.y);
+                                if(dist < bestConnection.dist){
                                     bestConnection.dist = dist;
                                     bestConnection.mainCell = cellA;
                                     bestConnection.otherCell = cellB;
@@ -194,221 +266,58 @@
                         }
                     }
                 }
-
-                if (bestConnection.otherAreaIndex !== -1) {
+                if(bestConnection.otherAreaIndex !== -1){
                     const targetArea = allAreas[bestConnection.otherAreaIndex];
                     carveTunnel(map, bestConnection.otherCell.x, bestConnection.otherCell.y, bestConnection.mainCell.x, bestConnection.mainCell.y, width, height);
                     targetArea.connectedToMain = true;
                     connectedCount++;
-                    const mainComponentId = allAreas[0].id; // Mark cells of new area as part of main component
-                    targetArea.cells.forEach(cell => { 
-                        if (areaMap[cell.y]) areaMap[cell.y][cell.x] = mainComponentId; 
+                    const mainComponentId = allAreas[0].id;
+                    targetArea.cells.forEach(cell => {
+                        if(areaMap[cell.y]) areaMap[cell.y][cell.x] = mainComponentId;
                     });
                 } else {
-                    // console.error("Map connectivity issue: Could not find a path to connect all areas.");
                     break; 
                 }
             }
         }
-
-        function initializeMap() {
-            mapData = randomWalkMapGenerator(MAP_GRID_WIDTH, MAP_GRID_HEIGHT, RW_STEPS_PER_WALKER, RW_NUM_WALKERS);
-            ensureMapConnectivity(mapData, MAP_GRID_WIDTH, MAP_GRID_HEIGHT);
-
-            let placedPlayer = false;
-            const startSearchY = Math.floor(MAP_GRID_HEIGHT / 2);
-            const startSearchX = Math.floor(MAP_GRID_WIDTH / 2);
-
-            for (let r = 0; r < Math.max(MAP_GRID_WIDTH, MAP_GRID_HEIGHT) / 2 && !placedPlayer; r++) {
-                for (let i = -r; i <= r && !placedPlayer; i++) {
-                    const coords = [
-                        { x: startSearchX + i, y: startSearchY - r }, { x: startSearchX + i, y: startSearchY + r },
-                        { x: startSearchX - r, y: startSearchY + i }, { x: startSearchX + r, y: startSearchY + i }
-                    ];
-                    for (const coord of coords) {
-                        if (coord.x > 0 && coord.x < MAP_GRID_WIDTH - 1 && coord.y > 0 && coord.y < MAP_GRID_HEIGHT - 1 && mapData[coord.y][coord.x] === 0) {
-                            player.x = coord.x + 0.5; player.y = coord.y + 0.5; placedPlayer = true; break;
-                        }
-                    }
-                }
-            }
-            if (!placedPlayer) {
-                for (let y = 1; y < MAP_GRID_HEIGHT - 1 && !placedPlayer; y++) {
-                    for (let x = 1; x < MAP_GRID_WIDTH - 1 && !placedPlayer; x++) {
-                        if (mapData[y][x] === 0) { player.x = x + 0.5; player.y = y + 0.5; placedPlayer = true; }
-                    }
-                }
-            }
-            // Fallback: if no central position found, try to force a spot or find any empty spot
-            if (!placedPlayer) {
-                // Try center of map, ensure it's clear
-                const fallbackX = Math.floor(MAP_GRID_WIDTH / 2);
-                const fallbackY = Math.floor(MAP_GRID_HEIGHT / 2);
-                if (mapData[fallbackY] && mapData[fallbackY][fallbackX] !== undefined) {
-                    mapData[fallbackY][fallbackX] = 0; // Ensure this spot is empty
-                    player.x = fallbackX + 0.5;
-                    player.y = fallbackY + 0.5;
-                    placedPlayer = true;
-                }
-                // If still not placed (e.g. map somehow entirely full, highly unlikely with generator)
-                if (!placedPlayer) { player.x = 1.5; player.y = 1.5; mapData[1][1] = 0; } // Absolute fallback
-            }
-            placeEnemies();
+        function initializeMap(){
+            mapData=randomWalkMapGenerator(MAP_GRID_WIDTH,MAP_GRID_HEIGHT,120,4);
+            ensureMapConnectivity(mapData,MAP_GRID_WIDTH,MAP_GRID_HEIGHT);
+            let placedPlayer=false;const sX=Math.floor(MAP_GRID_WIDTH/2),sY=Math.floor(MAP_GRID_HEIGHT/2);
+            for(let r=0;r<Math.max(MAP_GRID_WIDTH,MAP_GRID_HEIGHT)/2&&!placedPlayer;r++){for(let i=-r;i<=r&&!placedPlayer;i++){const coords=[{x:sX+i,y:sY-r},{x:sX+i,y:sY+r},{x:sX-r,y:sY+i},{x:sX+r,y:sY+i}];for(const coord of coords){if(coord.x>0&&coord.x<MAP_GRID_WIDTH-1&&coord.y>0&&coord.y<MAP_GRID_HEIGHT-1&&mapData[coord.y][coord.x]===0){player.x=coord.x+0.5;player.y=coord.y+0.5;placedPlayer=true;break;}}}}
+            if(!placedPlayer){for(let y=1;y<MAP_GRID_HEIGHT-1&&!placedPlayer;y++){for(let x=1;x<MAP_GRID_WIDTH-1&&!placedPlayer;x++){if(mapData[y][x]===0){player.x=x+0.5;player.y=y+0.5;placedPlayer=true;}}}}
+            if(!placedPlayer){player.x=1.5;player.y=1.5;const fX=Math.floor(MAP_GRID_WIDTH/2),fY=Math.floor(MAP_GRID_HEIGHT/2);if(mapData[fY]&&mapData[fY][fX]!==undefined){mapData[fY][fX]=0;player.x=fX+0.5;player.y=fY+0.5;}}
+            enemiesEliminated=0;placeEnemies();
         }
-
-        function placeEnemies() {
-            enemies.forEach(enemy => {
-                let placed = false; let attempts = 0;
-                while (!placed && attempts < 100) {
-                    const potX = Math.floor(Math.random() * (MAP_GRID_WIDTH - 2)) + 1;
-                    const potY = Math.floor(Math.random() * (MAP_GRID_HEIGHT - 2)) + 1;
-                    if (mapData[potY][potX] === 0) {
-                        const distToPlayer = Math.sqrt((potX + 0.5 - player.x) ** 2 + (potY + 0.5 - player.y) ** 2);
-                        if (distToPlayer > ENEMY_MIN_SPAWN_DISTANCE_FROM_PLAYER) { // Ensure enemies don't spawn too close
-                            enemy.x = potX + 0.5; enemy.y = potY + 0.5; enemy.alive = true; placed = true;
-                        }
-                    } attempts++;
-                } if (!placed) enemy.alive = false;
-            });
+        function placeEnemies(){
+            totalEnemiesSpawned=0;enemies.forEach(enemyBase=>{let placed=false;let attempts=0;while(!placed&&attempts<100){const potX=Math.floor(Math.random()*(MAP_GRID_WIDTH-2))+1,potY=Math.floor(Math.random()*(MAP_GRID_HEIGHT-2))+1;if(mapData[potY]&&mapData[potY][potX]===0){const distToPlayer=Math.sqrt((potX+0.5-player.x)**2+(potY+0.5-player.y)**2);if(distToPlayer>4){enemyBase.x=potX+0.5;enemyBase.y=potY+0.5;enemyBase.alive=true;enemyBase.health=enemyBase.maxHealth;placed=true;totalEnemiesSpawned++;}}attempts++;}if(!placed)enemyBase.alive=false;});
         }
+        function normalizeAngle(angle){ angle=angle%(2*Math.PI);if(angle<0)angle+=(2*Math.PI);return angle;}
+        function performHitscan(){
+            if(!audioInitialized)return;const STEP_SIZE=0.1;let currentX=player.x,currentY=player.y;for(let i=0;i<HITSCAN_RANGE/STEP_SIZE;i++){currentX+=player.dirX*STEP_SIZE;currentY+=player.dirY*STEP_SIZE;let mapTileX=Math.floor(currentX),mapTileY=Math.floor(currentY);if(isWall(mapTileX,mapTileY))return;for(let j=0;j<enemies.length;j++){const enemy=enemies[j];if(enemy.alive){const distToEnemyCenter=Math.sqrt((currentX-enemy.x)**2+(currentY-enemy.y)**2);if(distToEnemyCenter<enemy.size/2){const damage=Math.floor(Math.random()*(HITSCAN_MAX_DAMAGE-HITSCAN_MIN_DAMAGE+1))+HITSCAN_MIN_DAMAGE;enemy.health-=damage;if(enemy.health<=0){enemy.alive=false;enemiesEliminated++;playSound(sfxEnemyEliminated,"C2","0.2s");}else{playSound(sfxEnemyHit,"C4","0.1s");}return;}}}}}
+        async function handlePlayerFire(){
+            if(!audioInitialized){await startAudioContext();if(!audioInitialized)return;}if(player.health<=0)return;if(fireCooldown<=0){if(!sfxPlayerFire&&audioInitialized)initializeSounds();playSound(sfxPlayerFire,"C6","0.05s");performHitscan();fireCooldown=FIRE_COOLDOWN_MAX;}}
+        function updatePlayerState(){ if(player.isInvincible){player.invincibleTimer--;if(player.invincibleTimer<=0)player.isInvincible=false;}}
+        function updateEnemies(){
+            if(player.health<=0||!audioInitialized)return;const ACTIVATION_RADIUS=8,CONTACT_DISTANCE_THRESHOLD=player.radius+0.2;enemies.forEach(enemy=>{if(!enemy.alive)return;const distToPlayer=Math.sqrt((player.x-enemy.x)**2+(player.y-enemy.y)**2);if(distToPlayer<CONTACT_DISTANCE_THRESHOLD&&!player.isInvincible){player.health-=(enemy.contactDamage||5);player.isInvincible=true;player.invincibleTimer=player.invincibilityDuration;playSound(sfxPlayerDamage,"G2","0.15s");}if(distToPlayer<ACTIVATION_RADIUS&&distToPlayer>CONTACT_DISTANCE_THRESHOLD*0.8){let enemySpeed=enemy.speed||0.02;let intendedMoveXDir=0,intendedMoveYDir=0;if(player.x<enemy.x-0.1)intendedMoveXDir=-1;else if(player.x>enemy.x+0.1)intendedMoveXDir=1;if(player.y<enemy.y-0.1)intendedMoveYDir=-1;else if(player.y>enemy.y+0.1)intendedMoveYDir=1;if(intendedMoveXDir!==0){let newEnemyX=enemy.x+intendedMoveXDir*enemySpeed;if(!isWall(Math.floor(newEnemyX),Math.floor(enemy.y)))enemy.x=newEnemyX;}if(intendedMoveYDir!==0){let newEnemyY=enemy.y+intendedMoveYDir*enemySpeed;if(!isWall(Math.floor(enemy.x),Math.floor(newEnemyY)))enemy.y=newEnemyY;}}});}
+        function drawMapEditor(){
+            if(!mapEditorCtx)return;editorCellSize=mapEditorCanvas.width/MAP_GRID_WIDTH;mapEditorCanvas.height=editorCellSize*MAP_GRID_HEIGHT;mapEditorCtx.clearRect(0,0,mapEditorCanvas.width,mapEditorCanvas.height);for(let y=0;y<MAP_GRID_HEIGHT;y++){for(let x=0;x<MAP_GRID_WIDTH;x++){mapEditorCtx.fillStyle=mapData[y][x]===1?'#718096':'#2d3748';mapEditorCtx.fillRect(x*editorCellSize,y*editorCellSize,editorCellSize,editorCellSize);}}mapEditorCtx.strokeStyle='#4a5568';mapEditorCtx.lineWidth=1;for(let x=0;x<=MAP_GRID_WIDTH;x++){mapEditorCtx.beginPath();mapEditorCtx.moveTo(x*editorCellSize,0);mapEditorCtx.lineTo(x*editorCellSize,mapEditorCanvas.height);mapEditorCtx.stroke();}for(let y=0;y<=MAP_GRID_HEIGHT;y++){mapEditorCtx.beginPath();mapEditorCtx.moveTo(0,y*editorCellSize);mapEditorCtx.lineTo(mapEditorCanvas.width,y*editorCellSize);mapEditorCtx.stroke();}enemies.forEach(enemy=>{if(enemy.alive){mapEditorCtx.fillStyle=enemy.color;mapEditorCtx.beginPath();mapEditorCtx.arc(enemy.x*editorCellSize,enemy.y*editorCellSize,(enemy.size/2)*editorCellSize,0,2*Math.PI);mapEditorCtx.fill();}});mapEditorCtx.fillStyle='red';mapEditorCtx.beginPath();mapEditorCtx.arc(player.x*editorCellSize,player.y*editorCellSize,editorCellSize/3,0,2*Math.PI);mapEditorCtx.fill();mapEditorCtx.strokeStyle='red';mapEditorCtx.lineWidth=2;mapEditorCtx.beginPath();mapEditorCtx.moveTo(player.x*editorCellSize,player.y*editorCellSize);mapEditorCtx.lineTo(player.x*editorCellSize+Math.cos(player.angle)*editorCellSize,player.y*editorCellSize+Math.sin(player.angle)*editorCellSize);mapEditorCtx.stroke();}
+        function handleMapEditorClick(event){
+            const rect=mapEditorCanvas.getBoundingClientRect(),scaleX=mapEditorCanvas.width/rect.width,scaleY=mapEditorCanvas.height/rect.height;const mouseX=(event.clientX-rect.left)*scaleX,mouseY=(event.clientY-rect.top)*scaleY;const gridX=Math.floor(mouseX/editorCellSize),gridY=Math.floor(mouseY/editorCellSize);if(gridX>0&&gridX<MAP_GRID_WIDTH-1&&gridY>0&&gridY<MAP_GRID_HEIGHT-1){mapData[gridY][gridX]=mapData[gridY][gridX]===0?1:0;drawMapEditor();}}
+        function isWall(x,y){
+            const mapX=Math.floor(x),mapY=Math.floor(y);if(mapX<0||mapX>=MAP_GRID_WIDTH||mapY<0||mapY>=MAP_GRID_HEIGHT)return true;return mapData[mapY]?(mapData[mapY][mapX]===1):true;}
+        function handlePlayerInput(){
+            if(player.health<=0){if(keysPressed['r']){restartGame();keysPressed['r']=false;}return;}let dx=0,dy=0;if(keysPressed['w']){dx+=player.dirX*player.speed;dy+=player.dirY*player.speed;}if(keysPressed['s']){dx-=player.dirX*player.speed;dy-=player.dirY*player.speed;}if(keysPressed['a']){player.angle=normalizeAngle(player.angle-player.turnSpeed);}if(keysPressed['d']){player.angle=normalizeAngle(player.angle+player.turnSpeed);}const newPlayerX=player.x+dx,newPlayerY=player.y+dy;if(!isWall(newPlayerX+player.radius*Math.sign(dx),player.y))player.x=newPlayerX;if(!isWall(player.x,newPlayerY+player.radius*Math.sign(dy)))player.y=newPlayerY;}
+        function castRay(rayAngle){
+            rayAngle=normalizeAngle(rayAngle);const currentRayDirX=Math.cos(rayAngle),currentRayDirY=Math.sin(rayAngle);let mapX=Math.floor(player.x),mapY=Math.floor(player.y);let sideDistX,sideDistY;const deltaDistX=(currentRayDirX===0)?Infinity:Math.abs(1/currentRayDirX);const deltaDistY=(currentRayDirY===0)?Infinity:Math.abs(1/currentRayDirY);let stepX,stepY;let hit=0,side;let wallX_coord;let hitMapX_val=-1,hitMapY_val=-1;if(currentRayDirX<0){stepX=-1;sideDistX=(player.x-mapX)*deltaDistX;}else{stepX=1;sideDistX=(mapX+1-player.x)*deltaDistX;}if(currentRayDirY<0){stepY=-1;sideDistY=(player.y-mapY)*deltaDistY;}else{stepY=1;sideDistY=(mapY+1-player.y)*deltaDistY;}let distance=0;const MAX_DEPTH=20;let depth=0;while(!hit&&depth<MAX_DEPTH){if(sideDistX<sideDistY){sideDistX+=deltaDistX;mapX+=stepX;side=0;}else{sideDistY+=deltaDistY;mapY+=stepY;side=1;}if(mapX<0||mapX>=MAP_GRID_WIDTH||mapY<0||mapY>=MAP_GRID_HEIGHT){distance=MAX_DEPTH;hit=1;}else if(isWall(mapX,mapY)){hit=1;hitMapX_val=mapX;hitMapY_val=mapY;}depth++;}if(hit){if(side===0){distance=(mapX-player.x+(1-stepX)/2)/currentRayDirX;wallX_coord=player.y+distance*currentRayDirY;}else{distance=(mapY-player.y+(1-stepY)/2)/currentRayDirY;wallX_coord=player.x+distance*currentRayDirX;}wallX_coord-=Math.floor(wallX_coord);}else{distance=MAX_DEPTH;wallX_coord=0;}return{distance,side,wallX:wallX_coord,hitMapX:hitMapX_val,hitMapY:hitMapY_val};}
+        function getBrickTextureColor(texX,texY,side){
+            const BRH=16,BCW=32,MT=2;texX=texX%TEXTURE_WIDTH;texY=texY%TEXTURE_HEIGHT;let cBCRGB=(side===0)?BRICK_COLOR_SHADOW_RGB:BRICK_COLOR_PRIMARY_RGB;const row=Math.floor(texY/BRH);let xIBC=texX;if(row%2!==0){xIBC=(texX+BCW/2)%TEXTURE_WIDTH;}if(texY%BRH<MT||texY%BRH>=BRH-MT){return MORTAR_COLOR_RGB;}if(xIBC%BCW<MT||xIBC%BCW>=BCW-MT){return MORTAR_COLOR_RGB;}return cBCRGB;}
+        function drawUI(){
+            raycasterCtx.save();raycasterCtx.fillStyle="rgba(0,0,0,0.5)";raycasterCtx.fillRect(0,0,RAYCASTER_CANVAS_WIDTH,40);raycasterCtx.fillStyle="white";raycasterCtx.font="18px Arial";raycasterCtx.textAlign="left";const hP=Math.max(0,Math.floor((player.health/player.maxHealth)*100));const hT=`HEALTH: ${hP}%`;raycasterCtx.fillText(hT,10,25);const eT=`DROIDS: ${enemiesEliminated} / ${totalEnemiesSpawned}`;const eTW=raycasterCtx.measureText(eT).width;raycasterCtx.fillText(eT,RAYCASTER_CANVAS_WIDTH-eTW-10,25);if(player.health<=0){raycasterCtx.fillStyle="rgba(0,0,0,0.7)";raycasterCtx.fillRect(0,0,RAYCASTER_CANVAS_WIDTH,RAYCASTER_CANVAS_HEIGHT);raycasterCtx.fillStyle="red";raycasterCtx.font="bold 48px Arial";raycasterCtx.textAlign="center";raycasterCtx.fillText("GAME OVER",RAYCASTER_CANVAS_WIDTH/2,RAYCASTER_CANVAS_HEIGHT/2-20);raycasterCtx.fillStyle="white";raycasterCtx.font="24px Arial";raycasterCtx.fillText("Press 'R' to Restart",RAYCASTER_CANVAS_WIDTH/2,RAYCASTER_CANVAS_HEIGHT/2+30);}raycasterCtx.restore();}
+        function updateDebugInfoPanel(){
+            if(!selectedRayInfo||Object.keys(selectedRayInfo).length===0){debugTexturesEnabledVal.textContent=texturesEnabled?'ON':'OFF';debugRayIndexVal.textContent='N/A';debugRayAngleVal.textContent='N/A';debugWallHitXVal.textContent='N/A';debugWallHitYVal.textContent='N/A';debugDistRawVal.textContent='N/A';debugDistCorrVal.textContent='N/A';debugWallSideVal.textContent='N/A';debugWallXVal.textContent='N/A';debugTexXVal.textContent='N/A';return;}debugTexturesEnabledVal.textContent=texturesEnabled?'ON':'OFF';debugRayIndexVal.textContent=selectedRayInfo.index;debugRayAngleVal.textContent=(selectedRayInfo.angle*180/Math.PI).toFixed(2)+'°';debugWallHitXVal.textContent=selectedRayInfo.hitMapX!==-1?selectedRayInfo.hitMapX:'N/A';debugWallHitYVal.textContent=selectedRayInfo.hitMapY!==-1?selectedRayInfo.hitMapY:'N/A';debugDistRawVal.textContent=selectedRayInfo.rawDistance.toFixed(3);debugDistCorrVal.textContent=selectedRayInfo.correctedDistance.toFixed(3);debugWallSideVal.textContent=selectedRayInfo.side===0?'EW':(selectedRayInfo.side===1?'NS':'N/A');debugWallXVal.textContent=selectedRayInfo.wallX.toFixed(3);debugTexXVal.textContent=selectedRayInfo.texX!=='N/A (Solid)'?selectedRayInfo.texX:'N/A (Solid)';}
 
-        const player = { x: 3.5, y: 3.5, angle: Math.PI / 4, speed: 0.05, turnSpeed: 0.035, radius: 0.2, dirX: 0, dirY: 0, planeX: 0, planeY: 0 };
-        
-        // Enemy Constants
-        const ENEMY_ACTIVATION_RADIUS = 8;
-        const ENEMY_MIN_DISTANCE_TO_PLAYER = 0.5; // Minimum distance enemies try to keep from player
-        const ENEMY_MIN_SPAWN_DISTANCE_FROM_PLAYER = 4;
-        const FOV = Math.PI / 3;
-        let RAYCASTER_CANVAS_WIDTH = 800; // Default/Initial Width
-        let RAYCASTER_CANVAS_HEIGHT = 600; // Default/Initial Height (4:3 aspect ratio)
-        const NUM_RAYS = 320;
-        let zBuffer = new Array(NUM_RAYS);
-        let enemies = [
-            { id: 1, x: 0, y: 0, size: 0.7, color: '#e53e3e', alive: false, vOffset: 0.0, speed: 0.015 },
-            { id: 2, x: 0, y: 0, size: 0.6, color: '#48bb78', alive: false, vOffset: -0.2, speed: 0.02 },
-            { id: 3, x: 0, y: 0, size: 0.8, color: '#4299e1', alive: false, vOffset: 0.2, speed: 0.01 },
-            { id: 4, x: 0, y: 0, size: 1.0, color: '#ecc94b', alive: false, vOffset: 0.0, speed: 0.012 }
-        ];
-        const keysPressed = {};
-
-        let playerProjectiles = [];
-        const PROJECTILE_SPEED = 0.15; const PROJECTILE_SIZE = 0.15; const PROJECTILE_COLOR = '#FFFF99';
-        const FIRE_COOLDOWN_MAX = 10; let fireCooldown = 0;
-
-        function handlePlayerFire() {
-            if (fireCooldown <= 0) {
-                playerProjectiles.push({
-                    x: player.x, y: player.y, dx: player.dirX, dy: player.dirY, speed: PROJECTILE_SPEED,
-                    size: PROJECTILE_SIZE, color: PROJECTILE_COLOR, vOffset: 0, alive: true
-                });
-                fireCooldown = FIRE_COOLDOWN_MAX;
-            }
-        }
-
-        function updateProjectiles() {
-            if (fireCooldown > 0) fireCooldown--;
-            for (let i = playerProjectiles.length - 1; i >= 0; i--) {
-                const proj = playerProjectiles[i];
-                if (!proj.alive) continue;
-                proj.x += proj.dx * proj.speed; proj.y += proj.dy * proj.speed;
-                if (isWall(Math.floor(proj.x), Math.floor(proj.y))) { proj.alive = false; continue; }
-                for (let j = 0; j < enemies.length; j++) {
-                    const enemy = enemies[j];
-                    if (enemy.alive) {
-                        const dist = Math.sqrt((proj.x - enemy.x) ** 2 + (proj.y - enemy.y) ** 2);
-                        if (dist < (enemy.size / 2 + proj.size / 2)) {
-                            proj.alive = false; enemy.alive = false; break;
-                        }
-                    }
-                }
-            }
-            playerProjectiles = playerProjectiles.filter(p => p.alive);
-        }
-
-        function updateEnemies() {
-            enemies.forEach(enemy => {
-                if (!enemy.alive) return;
-                const distToPlayer = Math.sqrt((player.x - enemy.x) ** 2 + (player.y - enemy.y) ** 2);
-                if (distToPlayer < ENEMY_ACTIVATION_RADIUS && distToPlayer > ENEMY_MIN_DISTANCE_TO_PLAYER) {
-                    let enemySpeed = enemy.speed || 0.02;
-                    let intendedMoveXDir = 0; let intendedMoveYDir = 0;
-                    if (player.x < enemy.x - 0.1) intendedMoveXDir = -1; else if (player.x > enemy.x + 0.1) intendedMoveXDir = 1;
-                    if (player.y < enemy.y - 0.1) intendedMoveYDir = -1; else if (player.y > enemy.y + 0.1) intendedMoveYDir = 1;
-                    if (intendedMoveXDir !== 0) {
-                        let newX = enemy.x + intendedMoveXDir * enemySpeed;
-                        if (!isWall(Math.floor(newX), Math.floor(enemy.y))) enemy.x = newX;
-                    }
-                    if (intendedMoveYDir !== 0) {
-                        let newY = enemy.y + intendedMoveYDir * enemySpeed;
-                        if (!isWall(Math.floor(enemy.x), Math.floor(newY))) enemy.y = newY;
-                    }
-                }
-            });
-        }
-        function normalizeAngle(angle) { angle = angle % (2 * Math.PI); if (angle < 0) angle += (2 * Math.PI); return angle; }
-
-        function drawMapEditor() {
-            if (!mapEditorCtx) return;
-            editorCellSize = mapEditorCanvas.width / MAP_GRID_WIDTH;
-            mapEditorCanvas.height = editorCellSize * MAP_GRID_HEIGHT;
-            mapEditorCtx.clearRect(0, 0, mapEditorCanvas.width, mapEditorCanvas.height);
-            for (let y = 0; y < MAP_GRID_HEIGHT; y++) { for (let x = 0; x < MAP_GRID_WIDTH; x++) { mapEditorCtx.fillStyle = mapData[y][x] === 1 ? '#718096' : '#2d3748'; mapEditorCtx.fillRect(x * editorCellSize, y * editorCellSize, editorCellSize, editorCellSize); } }
-            mapEditorCtx.strokeStyle = '#4a5568'; mapEditorCtx.lineWidth = 1;
-            for (let x = 0; x <= MAP_GRID_WIDTH; x++) { mapEditorCtx.beginPath(); mapEditorCtx.moveTo(x * editorCellSize, 0); mapEditorCtx.lineTo(x * editorCellSize, mapEditorCanvas.height); mapEditorCtx.stroke(); }
-            for (let y = 0; y <= MAP_GRID_HEIGHT; y++) { mapEditorCtx.beginPath(); mapEditorCtx.moveTo(0, y * editorCellSize); mapEditorCtx.lineTo(mapEditorCanvas.width, y * editorCellSize); mapEditorCtx.stroke(); }
-            enemies.forEach(enemy => { if (enemy.alive) { mapEditorCtx.fillStyle = enemy.color; mapEditorCtx.beginPath(); mapEditorCtx.arc(enemy.x * editorCellSize, enemy.y * editorCellSize, (enemy.size / 2) * editorCellSize, 0, 2 * Math.PI); mapEditorCtx.fill(); } });
-            playerProjectiles.forEach(proj => { if (proj.alive) { mapEditorCtx.fillStyle = proj.color; mapEditorCtx.beginPath(); mapEditorCtx.arc(proj.x * editorCellSize, proj.y * editorCellSize, (proj.size / 2) * editorCellSize, 0, 2 * Math.PI); mapEditorCtx.fill(); } });
-            mapEditorCtx.fillStyle = 'red'; mapEditorCtx.beginPath(); mapEditorCtx.arc(player.x * editorCellSize, player.y * editorCellSize, editorCellSize / 3, 0, 2 * Math.PI); mapEditorCtx.fill();
-            mapEditorCtx.strokeStyle = 'red'; mapEditorCtx.lineWidth = 2; mapEditorCtx.beginPath(); mapEditorCtx.moveTo(player.x * editorCellSize, player.y * editorCellSize);
-            mapEditorCtx.lineTo(player.x * editorCellSize + Math.cos(player.angle) * editorCellSize, player.y * editorCellSize + Math.sin(player.angle) * editorCellSize); mapEditorCtx.stroke();
-        }
-
-        function handleMapEditorClick(event) {
-            const rect = mapEditorCanvas.getBoundingClientRect(); const scaleX = mapEditorCanvas.width / rect.width; const scaleY = mapEditorCanvas.height / rect.height;
-            const mouseX = (event.clientX - rect.left) * scaleX; const mouseY = (event.clientY - rect.top) * scaleY;
-            const gridX = Math.floor(mouseX / editorCellSize); const gridY = Math.floor(mouseY / editorCellSize);
-            if (gridX > 0 && gridX < MAP_GRID_WIDTH - 1 && gridY > 0 && gridY < MAP_GRID_HEIGHT - 1) {
-                mapData[gridY][gridX] = mapData[gridY][gridX] === 0 ? 1 : 0;
-                drawMapEditor();
-            }
-        }
-        function isWall(x, y) {
-            const mapX = Math.floor(x); const mapY = Math.floor(y);
-            if (mapX < 0 || mapX >= MAP_GRID_WIDTH || mapY < 0 || mapY >= MAP_GRID_HEIGHT) return true;
-            return mapData[mapY] ? (mapData[mapY][mapX] === 1) : true;
-        }
-        function handlePlayerInput() {
-            let dx = 0; let dy = 0;
-            if (keysPressed['w']) { dx += player.dirX * player.speed; dy += player.dirY * player.speed; }
-            if (keysPressed['s']) { dx -= player.dirX * player.speed; dy -= player.dirY * player.speed; }
-            if (keysPressed['a']) { player.angle = normalizeAngle(player.angle - player.turnSpeed); }
-            if (keysPressed['d']) { player.angle = normalizeAngle(player.angle + player.turnSpeed); }
-            const nPX = player.x + dx; const nPY = player.y + dy;
-            if (!isWall(nPX + player.radius * Math.sign(dx), player.y)) player.x = nPX;
-            if (!isWall(player.x, nPY + player.radius * Math.sign(dy))) player.y = nPY;
-        }
-
-        function castRay(rayAngle) {
-            rayAngle = normalizeAngle(rayAngle); const rDX = Math.cos(rayAngle); const rDY = Math.sin(rayAngle);
-            let mX = Math.floor(player.x); let mY = Math.floor(player.y); let sDX, sDY;
-            const dDX = (rDX === 0) ? Infinity : Math.abs(1 / rDX); const dDY = (rDY === 0) ? Infinity : Math.abs(1 / rDY);
-            let sX, sY; let hit = 0; let side;
-            if (rDX < 0) { sX = -1; sDX = (player.x - mX) * dDX; } else { sX = 1; sDX = (mX + 1.0 - player.x) * dDX; }
-            if (rDY < 0) { sY = -1; sDY = (player.y - mY) * dDY; } else { sY = 1; sDY = (mY + 1.0 - player.y) * dDY; } // Fixed: player.y - mY
-            let dist = 0; let depth = 0;
-            while (!hit && depth < MAX_RAY_DEPTH) {
-                if (sDX < sDY) { sDX += dDX; mX += sX; side = 0; } else { sDY += dDY; mY += sY; side = 1; }
-                if (mX < 0 || mX >= MAP_GRID_WIDTH || mY < 0 || mY >= MAP_GRID_HEIGHT) { dist = MAX_RAY_DEPTH; hit = 1; } // Hit world boundary
-                else if (isWall(mX, mY)) hit = 1;
-                depth++;
-            }
-            if (hit && dist !== MAX_RAY_DEPTH) { // If hit a wall (not boundary)
-                 if (side === 0) dist = (mX - player.x + (1 - sX) / 2) / rDX; else dist = (mY - player.y + (1 - sY) / 2) / rDY;
-            } else if (!hit) { // Ray didn't hit anything within MAX_RAY_DEPTH
-                dist = MAX_RAY_DEPTH;
-            }
-            return { distance: dist, side };
-        }
+        // Removed getSkyTextureColor function
 
         function renderRaycasterView() {
             if (!raycasterCtx) return;
@@ -416,119 +325,100 @@
             player.dirX = Math.cos(player.angle); player.dirY = Math.sin(player.angle);
             const fovFactor = Math.tan(FOV / 2.0);
             player.planeX = -player.dirY * fovFactor; player.planeY = player.dirX * fovFactor;
-            raycasterCtx.fillStyle = '#3182ce'; raycasterCtx.fillRect(0, 0, RAYCASTER_CANVAS_WIDTH, RAYCASTER_CANVAS_HEIGHT / 2);
-            raycasterCtx.fillStyle = '#4a5568'; raycasterCtx.fillRect(0, RAYCASTER_CANVAS_HEIGHT / 2, RAYCASTER_CANVAS_WIDTH, RAYCASTER_CANVAS_HEIGHT / 2);
-            for (let i = 0; i < NUM_RAYS; i++) zBuffer[i] = Infinity;
-            const rayIncrement = FOV / NUM_RAYS; let currentRayAngle = player.angle - FOV / 2;
-            const columnWidth = RAYCASTER_CANVAS_WIDTH / NUM_RAYS;
-
-            for (let i = 0; i < NUM_RAYS; i++) {
-                const { distance, side } = castRay(currentRayAngle);
-                const correctedDistance = distance * Math.cos(currentRayAngle - player.angle);
-                zBuffer[i] = correctedDistance;
-                const sliceHeight = (correctedDistance <= 0 ? RAYCASTER_CANVAS_HEIGHT : (1 / correctedDistance) * RAYCASTER_CANVAS_HEIGHT);
-                const wallTop = RAYCASTER_CANVAS_HEIGHT / 2 - sliceHeight / 2;
-                let wallColorHex = side === 0 ? '#a0aec0' : '#718096';
-                const brightness = Math.max(0.2, 1 - (correctedDistance / (MAP_GRID_WIDTH * 0.65)));
-                const r = parseInt(wallColorHex.slice(1, 3), 16) * brightness, g = parseInt(wallColorHex.slice(3, 5), 16) * brightness, b = parseInt(wallColorHex.slice(5, 7), 16) * brightness;
-                raycasterCtx.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
-                raycasterCtx.fillRect(i * columnWidth, wallTop, columnWidth + 0.5, sliceHeight);
-                currentRayAngle = normalizeAngle(currentRayAngle + rayIncrement);
-            }
-
-            let allSprites = [];
-            enemies.forEach(e => { if (e.alive) allSprites.push({ ...e, type: 'enemy', dist: Math.sqrt((player.x - e.x) ** 2 + (player.y - e.y) ** 2) }) });
-            playerProjectiles.forEach(p => { if (p.alive) allSprites.push({ ...p, type: 'projectile', dist: Math.sqrt((player.x - p.x) ** 2 + (player.y - p.y) ** 2) }) });
-            allSprites.sort((a, b) => b.dist - a.dist);
-
-            for (let i = 0; i < allSprites.length; i++) {
-                const sprite = allSprites[i]; const spriteX = sprite.x - player.x; const spriteY = sprite.y - player.y;
-                const invDet = 1.0 / (player.planeX * player.dirY - player.dirX * player.planeY);
-                const transformX = invDet * (player.dirY * spriteX - player.dirX * spriteY);
-                const transformY = invDet * (-player.planeY * spriteX + player.planeX * spriteY);
-                if (transformY <= 0.1) continue;
-                const spriteScreenX = Math.floor((RAYCASTER_CANVAS_WIDTH / 2) * (1 + transformX / transformY));
-                const spriteWorldSize = sprite.size; const vOffsetWorld = sprite.vOffset || 0.0;
-                const spriteHeightOnScreen = Math.abs(Math.floor((RAYCASTER_CANVAS_HEIGHT / transformY) * spriteWorldSize));
-                const vMoveScreen = Math.floor((vOffsetWorld / transformY) * RAYCASTER_CANVAS_HEIGHT);
-                let drawStartY = Math.floor(-spriteHeightOnScreen / 2 + RAYCASTER_CANVAS_HEIGHT / 2 + vMoveScreen);
-                let drawEndY = Math.floor(spriteHeightOnScreen / 2 + RAYCASTER_CANVAS_HEIGHT / 2 + vMoveScreen);
-                const spriteWidthOnScreen = spriteHeightOnScreen;
-                let drawStartX = Math.floor(-spriteWidthOnScreen / 2 + spriteScreenX); let drawEndX = Math.floor(spriteWidthOnScreen / 2 + spriteScreenX);
-                for (let stripe = drawStartX; stripe < drawEndX; stripe++) {
-                    if (stripe >= 0 && stripe < RAYCASTER_CANVAS_WIDTH) {
-                        const zBufferIdx = Math.floor(stripe / columnWidth);
-                        if (zBufferIdx >= 0 && zBufferIdx < NUM_RAYS && transformY < zBuffer[zBufferIdx]) {
-                            const finalDrawStartY = Math.max(0, drawStartY); const finalDrawEndY = Math.min(RAYCASTER_CANVAS_HEIGHT - 1, drawEndY);
-                            if (finalDrawEndY > finalDrawStartY) {
-                                raycasterCtx.fillStyle = sprite.color;
-                                raycasterCtx.fillRect(stripe, finalDrawStartY, 1, finalDrawEndY - finalDrawStartY);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        function gameLoop() {
-            handlePlayerInput();
-            updateEnemies(); 
-            updateProjectiles();
-            renderRaycasterView();
-            drawMapEditor();
-            requestAnimationFrame(gameLoop);
-        }
-        window.addEventListener('keydown', (event) => { keysPressed[event.key.toLowerCase()] = true; });
-        window.addEventListener('keyup', (event) => { keysPressed[event.key.toLowerCase()] = false; });
-        
-        const EDITOR_PANEL_PADDING = 32; // Sum of left and right padding (1rem * 2 = 16px * 2 = 32px)
-
-        function resizeCanvases() {
-            const editorPanel = mapEditorCanvas.parentElement; 
-            if (editorPanel) { mapEditorCanvas.width = Math.max(50, editorPanel.clientWidth - EDITOR_PANEL_PADDING); } // Ensure min width
-            // For Raycaster, internal resolution is set in init. CSS scales the display.
-            // If you wanted dynamic internal resolution, you'd update RAYCASTER_CANVAS_WIDTH/HEIGHT here
-            // and potentially re-initialize zBuffer.
-            drawMapEditor(); 
-            renderRaycasterView(); 
-        }
-
-        function init() {
-            initializeMap();
-            mapEditorCanvas.addEventListener('click', handleMapEditorClick);
-            raycasterCanvas.addEventListener('click', handlePlayerFire);
-            generateMapBtn.addEventListener('click', () => { initializeMap(); drawMapEditor(); renderRaycasterView(); });
             
-            const editorPanel = mapEditorCanvas.parentElement;
-            if (editorPanel) { 
-                mapEditorCanvas.width = editorPanel.clientWidth > (50 + EDITOR_PANEL_PADDING) ? editorPanel.clientWidth - EDITOR_PANEL_PADDING : 280 - EDITOR_PANEL_PADDING; // Ensure min width, account for padding
-                editorCellSize = mapEditorCanvas.width / MAP_GRID_WIDTH;
-                mapEditorCanvas.height = editorCellSize * MAP_GRID_HEIGHT;
+            // 1. Draw Sky (Reverted to solid color)
+            raycasterCtx.fillStyle = '#3182ce'; // Original sky blue
+            raycasterCtx.fillRect(0, 0, RAYCASTER_CANVAS_WIDTH, RAYCASTER_CANVAS_HEIGHT / 2);
+            
+            // 2. Draw Floor
+            raycasterCtx.fillStyle = '#4a5568'; 
+            raycasterCtx.fillRect(0, RAYCASTER_CANVAS_HEIGHT / 2, RAYCASTER_CANVAS_WIDTH, RAYCASTER_CANVAS_HEIGHT / 2);
+            
+            const columnWidth = RAYCASTER_CANVAS_WIDTH / NUM_RAYS;
+            const rayIncrement = FOV / NUM_RAYS;
+            let currentRayAngleForWalls = player.angle - FOV / 2; 
+            for (let i = 0; i < NUM_RAYS; i++) zBuffer[i] = Infinity;
+
+            // 3. Draw Walls
+            for (let i = 0; i < NUM_RAYS; i++) { 
+                const castResult = castRay(currentRayAngleForWalls); 
+                const { distance: rawDistance, side, wallX, hitMapX, hitMapY } = castResult;
+                const correctedDistance = rawDistance * Math.cos(currentRayAngleForWalls - player.angle);
+                zBuffer[i] = correctedDistance;
+                
+                const sliceHeight = (correctedDistance <= 0.01 ? RAYCASTER_CANVAS_HEIGHT : (1 / correctedDistance) * RAYCASTER_CANVAS_HEIGHT);
+                const wallTop = Math.max(0, RAYCASTER_CANVAS_HEIGHT / 2 - sliceHeight / 2);
+                const wallBottom = Math.min(RAYCASTER_CANVAS_HEIGHT, RAYCASTER_CANVAS_HEIGHT / 2 + sliceHeight / 2);
+                
+                let calculatedTexX = 0; 
+
+                if (texturesEnabled && hitMapX !== -1) { 
+                    const rayDirX_current = Math.cos(currentRayAngleForWalls);
+                    const rayDirY_current = Math.sin(currentRayAngleForWalls);
+                    calculatedTexX = Math.floor(wallX * TEXTURE_WIDTH);
+                    if ((side === 0 && rayDirX_current < 0) || (side === 1 && rayDirY_current < 0)) { 
+                         calculatedTexX = TEXTURE_WIDTH - 1 - calculatedTexX;
+                    }
+
+                    for (let y = Math.floor(wallTop); y < Math.floor(wallBottom); y++) {
+                        const d = y - (RAYCASTER_CANVAS_HEIGHT / 2 - sliceHeight / 2); 
+                        let texY = Math.floor((d * TEXTURE_HEIGHT) / sliceHeight);
+                        texY = Math.max(0, Math.min(TEXTURE_HEIGHT - 1, texY)); 
+                        let [r_tex, g_tex, b_tex] = getBrickTextureColor(calculatedTexX, texY, side);
+                        const brightness = Math.max(0.1, 1 - (correctedDistance / (MAP_GRID_WIDTH * 0.75))); 
+                        r_tex = Math.floor(r_tex * brightness); g_tex = Math.floor(g_tex * brightness); b_tex = Math.floor(b_tex * brightness);
+                        raycasterCtx.fillStyle = `rgb(${r_tex},${g_tex},${b_tex})`;
+                        raycasterCtx.fillRect(i * columnWidth, y, columnWidth + 0.5, 1); 
+                    }
+                } else if (hitMapX !== -1) { 
+                    let wallColorHex = side === 0 ? '#a0aec0' : '#718096'; 
+                    const brightness = Math.max(0.2, 1 - (correctedDistance / (MAP_GRID_WIDTH * 0.65)));
+                    const r = parseInt(wallColorHex.slice(1,3),16)*brightness,g=parseInt(wallColorHex.slice(3,5),16)*brightness,b=parseInt(wallColorHex.slice(5,7),16)*brightness;
+                    raycasterCtx.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
+                    raycasterCtx.fillRect(i * columnWidth, Math.floor(wallTop), columnWidth + 0.5, Math.ceil(sliceHeight));
+                }
+                
+                if (i === debugRayToInspect) {
+                    selectedRayInfo = {
+                        index: i, angle: currentRayAngleForWalls, hitMapX: hitMapX, hitMapY: hitMapY,
+                        rawDistance: rawDistance, correctedDistance: correctedDistance,
+                        side: hitMapX !== -1 ? side : -1, 
+                        wallX: hitMapX !== -1 ? wallX : 0,
+                        texX: (texturesEnabled && hitMapX !== -1) ? calculatedTexX : 'N/A',
+                    };
+                }
+                currentRayAngleForWalls = normalizeAngle(currentRayAngleForWalls + rayIncrement);
             }
 
-            // Set Raycaster Canvas Internal Resolution
-            const raycasterPanel = raycasterCanvas.parentElement;
-            const desiredBaseWidth = 800;
-            const desiredBaseHeight = 600; // For 4:3 aspect ratio with desiredBaseWidth
-
-            if (raycasterPanel && raycasterPanel.clientWidth > 0) {
-                // Use the panel's width if it's larger than our desired base, otherwise use desired base.
-                // This allows the canvas to be wider if space is available.
-                RAYCASTER_CANVAS_WIDTH = Math.max(desiredBaseWidth, raycasterPanel.clientWidth);
-                RAYCASTER_CANVAS_HEIGHT = Math.floor(RAYCASTER_CANVAS_WIDTH * (3/4)); // Maintain 4:3 aspect ratio
-            } else {
-                // Fallback if panel clientWidth is not available or zero
-                RAYCASTER_CANVAS_WIDTH = desiredBaseWidth;
-                RAYCASTER_CANVAS_HEIGHT = desiredBaseHeight;
-            }
-            raycasterCanvas.width = RAYCASTER_CANVAS_WIDTH;
-            raycasterCanvas.height = RAYCASTER_CANVAS_HEIGHT;
-            zBuffer = new Array(NUM_RAYS);
-
-            window.addEventListener('resize', resizeCanvases);
-            gameLoop();
+            // 4. Draw Sprites (Enemies)
+            let allSprites = []; 
+            enemies.forEach(e=>{if(e.alive)allSprites.push({...e,type:'enemy',dist:Math.sqrt((player.x-e.x)**2+(player.y-e.y)**2)})});allSprites.sort((a,b)=>b.dist-a.dist);for(let i=0;i<allSprites.length;i++){const S=allSprites[i];const sXs=S.x-player.x,sYs=S.y-player.y;const invD=1/(player.planeX*player.dirY-player.dirX*player.planeY);const tX=invD*(player.dirY*sXs-player.dirX*sYs),tY=invD*(-player.planeY*sXs+player.planeX*sYs);if(tY<=0.1)continue;const sSX=Math.floor((RAYCASTER_CANVAS_WIDTH/2)*(1+tX/tY));const sWS=S.size,vOW=S.vOffset||0;const sHOS=Math.abs(Math.floor((RAYCASTER_CANVAS_HEIGHT/tY)*sWS));const vMS=Math.floor((vOW/tY)*RAYCASTER_CANVAS_HEIGHT);let dSY=Math.floor(-sHOS/2+RAYCASTER_CANVAS_HEIGHT/2+vMS),dEY=Math.floor(sHOS/2+RAYCASTER_CANVAS_HEIGHT/2+vMS);const sWOS=sHOS;let dSX=Math.floor(-sWOS/2+sSX),dEX=Math.floor(sWOS/2+sSX);for(let stripe=dSX;stripe<dEX;stripe++){if(stripe>=0&&stripe<RAYCASTER_CANVAS_WIDTH){const zBI=Math.floor(stripe/columnWidth);if(zBI>=0&&zBI<NUM_RAYS&&tY<zBuffer[zBI]){const fDSY=Math.max(0,dSY),fDEY=Math.min(RAYCASTER_CANVAS_HEIGHT-1,dEY);if(fDEY>fDSY){raycasterCtx.fillStyle=S.color;raycasterCtx.fillRect(stripe,fDSY,1,fDEY-fDSY);}}}}}
+            
+            // 5. Draw UI
+            drawUI();
         }
-        document.addEventListener('DOMContentLoaded', init);
+        
+        function restartGame(){ player.health=player.maxHealth;player.isInvincible=false;player.invincibleTimer=0;fireCooldown=0;gameLoopRunning=true;initializeMap();}
+        function gameLoop(){ if(!gameLoopRunning)return;if(fireCooldown>0)fireCooldown--;updatePlayerState();if(player.health>0){handlePlayerInput();updateEnemies();}else{if(keysPressed['r']){restartGame();keysPressed['r']=false;}}renderRaycasterView();updateDebugInfoPanel();drawMapEditor();requestAnimationFrame(gameLoop);}
+        
+        window.addEventListener('keydown',(event)=>{ 
+            keysPressed[event.key.toLowerCase()]=true;
+            if (event.key.toLowerCase() === 't' && !tKeyPressed) {
+                texturesEnabled = !texturesEnabled;
+                tKeyPressed = true;
+            }
+        });
+        window.addEventListener('keyup',(event)=>{
+            keysPressed[event.key.toLowerCase()]=false;
+            if (event.key.toLowerCase() === 't') {
+                tKeyPressed = false;
+            }
+        });
+        
+        function resizeCanvases(){ const eP=mapEditorCanvas.parentElement;if(eP){mapEditorCanvas.width=eP.clientWidth>50?eP.clientWidth-32:280-32;}drawMapEditor();renderRaycasterView();}
+        function init(){
+            initializeMap();mapEditorCanvas.addEventListener('click',handleMapEditorClick);raycasterCanvas.addEventListener('click',async()=>{await handlePlayerFire();});generateMapBtn.addEventListener('click',()=>{restartGame();});const eP=mapEditorCanvas.parentElement;if(eP){mapEditorCanvas.width=eP.clientWidth>50?eP.clientWidth-32:280-32;editorCellSize=mapEditorCanvas.width/MAP_GRID_WIDTH;mapEditorCanvas.height=editorCellSize*MAP_GRID_HEIGHT;}const rP=raycasterCanvas.parentElement;if(rP&&rP.clientWidth>0){RAYCASTER_CANVAS_WIDTH=rP.clientWidth;RAYCASTER_CANVAS_HEIGHT=Math.floor(RAYCASTER_CANVAS_WIDTH*(10/16));}else{RAYCASTER_CANVAS_WIDTH=640;RAYCASTER_CANVAS_HEIGHT=400;}raycasterCanvas.width=RAYCASTER_CANVAS_WIDTH;raycasterCanvas.height=RAYCASTER_CANVAS_HEIGHT;zBuffer=new Array(NUM_RAYS);window.addEventListener('resize',resizeCanvases);gameLoopRunning=true;if(typeof Tone!=='undefined'&&Tone.start){startAudioContext().catch(e=>{});}gameLoop();}
+        document.addEventListener('DOMContentLoaded',init);
     </script>
 </body>
 </html>
